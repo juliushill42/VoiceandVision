@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Voice & Vision",
+      "hasCanvas": true,
+      "bodyTextLen": 355,
+      "bodyTextHash": "81020f1b459a310c95df53f8a0b54ac996d78f9aecd3f25e9b5d01bbcad930f6",
+      "bodyTextPrefix": "Voice & Vision Zero-dollar studio On-device. No upload. Flow Voi",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Voice & Vision",
+      "hasCanvas": true,
+      "bodyTextLen": 262,
+      "bodyTextHash": "d457114f8f17091185b7915c188524e6a2d244784151000f955079b9b7da8000",
+      "bodyTextPrefix": "Voice & Vision 00:00.0 / 00:23.2 FRAME 9:16 16:9 1:1 LOOK Native",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

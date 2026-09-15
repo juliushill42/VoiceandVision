@@ -14,27 +14,20 @@ export interface KenBurns {
   toY: number;
 }
 
-export interface WordCue {
-  text: string;
-  start: number;
-  end: number;
+export interface WordCue { text: string; start: number; end: number; }
+export interface CaptionCue { id: string; text: string; start: number; end: number; words: WordCue[]; }
+export interface Overlay { id: string; text: string; start: number; end: number; placement: OverlayPlacement; }
+
+export interface SceneEdit {
+  sourceDuration?: number;
+  trimStart?: number;
+  trimEnd?: number;
+  playbackRate?: number;
+  reverse?: boolean;
+  muted?: boolean;
+  freezeAt?: number | null;
 }
 
-export interface CaptionCue {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  words: WordCue[];
-}
-
-export interface Overlay {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  placement: OverlayPlacement;
-}
 
 export interface Scene {
   id: string;
@@ -43,16 +36,13 @@ export interface Scene {
   label: string;
   duration: number;
   kenBurns: KenBurns;
+  assetId?: string;
+  mime?: string;
+  sizeBytes?: number;
+  edit?: SceneEdit;
 }
 
-export interface FlowSession {
-  id: string;
-  title: string;
-  text: string;
-  createdAt: number;
-  durationMs: number;
-  wordCount: number;
-}
+export interface FlowSession { id: string; title: string; text: string; createdAt: number; durationMs: number; wordCount: number; }
 
 export interface Project {
   id: string;
@@ -66,7 +56,10 @@ export interface Project {
   look: LookId;
   voiceoverUrl: string | null;
   voiceoverName: string | null;
+  voiceoverAssetId?: string | null;
   updatedAt: number;
+  schemaVersion?: number;
+  revision?: number;
 }
 
 export const ASPECT_SIZE: Record<AspectId, { w: number; h: number }> = {

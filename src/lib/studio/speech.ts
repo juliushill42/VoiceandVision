@@ -1,3 +1,5 @@
+import { preferredAudioRecorderMime } from "./media-guard.ts";
+
 type SpeechRecCtor = new () => SpeechRecognitionLike;
 
 interface SpeechRecognitionLike {
@@ -56,6 +58,19 @@ export function startDictation(lang: string, handlers: DictationHandlers): { sto
 
   let stopped = false;
   let rec: SpeechRecognitionLike | null = null;
+  let restartAttempt = 0;
+  let restartTimer: number | null = null;
+  let ended = false;
+
+  const finish = () => {
+    if (ended) return;
+    ended = true;
+    if (restartTimer !== null) {
+      window.clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+    handlers.onEnd();
+  };
 
   const attach = () => {
     if (stopped) return;
@@ -64,6 +79,7 @@ export function startDictation(lang: string, handlers: DictationHandlers): { sto
     rec.interimResults = true;
     rec.lang = lang;
     rec.onresult = (event) => {
+      restartAttempt = 0;
       let interim = "";
       let finals = "";
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
@@ -76,8 +92,13 @@ export function startDictation(lang: string, handlers: DictationHandlers): { sto
     };
     rec.onerror = (event) => {
       if (event.error === "no-speech" || event.error === "aborted") return;
-      if (event.error === "not-allowed") {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         handlers.onError("Microphone permission was blocked.");
+        stopped = true;
+        return;
+      }
+      if (event.error === "audio-capture") {
+        handlers.onError("No working microphone was found.");
         stopped = true;
         return;
       }
@@ -85,24 +106,28 @@ export function startDictation(lang: string, handlers: DictationHandlers): { sto
     };
     rec.onend = () => {
       if (stopped) {
-        handlers.onEnd();
+        finish();
         return;
       }
-      window.setTimeout(() => {
+      const delay = Math.min(2_000, 120 * 2 ** Math.min(4, restartAttempt));
+      restartAttempt += 1;
+      restartTimer = window.setTimeout(() => {
+        restartTimer = null;
         if (stopped) return;
         try {
           attach();
         } catch {
-          handlers.onEnd();
+          stopped = true;
+          finish();
         }
-      }, 120);
+      }, delay);
     };
     try {
       rec.start();
     } catch {
       handlers.onError("Could not start the microphone.");
       stopped = true;
-      handlers.onEnd();
+      finish();
     }
   };
 
@@ -110,13 +135,22 @@ export function startDictation(lang: string, handlers: DictationHandlers): { sto
 
   return {
     stop: () => {
+      if (stopped) return;
       stopped = true;
+      if (restartTimer !== null) {
+        window.clearTimeout(restartTimer);
+        restartTimer = null;
+      }
       try {
         rec?.stop();
       } catch {
-        /* already stopped */
+        try {
+          rec?.abort();
+        } catch {
+          // Recognition already ended.
+        }
       }
-      handlers.onEnd();
+      finish();
     },
   };
 }
@@ -139,46 +173,105 @@ export function speakText(opts: {
   const voices = window.speechSynthesis.getVoices();
   const voice = voices.find((item) => item.voiceURI === opts.voiceURI) ?? voices[0];
   if (voice) utterance.voice = voice;
-  utterance.rate = opts.rate;
-  utterance.pitch = opts.pitch;
-  utterance.onend = () => opts.onend?.();
+  utterance.rate = Math.min(4, Math.max(0.1, opts.rate));
+  utterance.pitch = Math.min(2, Math.max(0, opts.pitch));
+  let ended = false;
+  const finish = () => {
+    if (ended) return;
+    ended = true;
+    opts.onend?.();
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
   window.speechSynthesis.speak(utterance);
   return () => {
     window.speechSynthesis.cancel();
-    opts.onend?.();
+    finish();
   };
 }
 
-export async function recordMicrophone(): Promise<{
+export interface MicrophoneRecording {
   stop: () => Promise<Blob>;
   stream: MediaStream;
-} | null> {
-  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+}
+
+export async function recordMicrophone(): Promise<MicrophoneRecording | null> {
+  if (
+    typeof navigator === "undefined" ||
+    !navigator.mediaDevices?.getUserMedia ||
+    typeof MediaRecorder === "undefined"
+  ) {
     return null;
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-    ? "audio/webm;codecs=opus"
-    : "audio/webm";
-  const recorder = new MediaRecorder(stream, { mimeType: mime });
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: { ideal: 1 },
+    },
+  });
+
+  const mime = preferredAudioRecorderMime();
+  const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
   const chunks: BlobPart[] = [];
+  let stopped = false;
+  let fatalError: Error | null = null;
+
+  const cleanup = () => {
+    stream.getTracks().forEach((track) => track.stop());
+  };
+
   recorder.ondataavailable = (event) => {
     if (event.data.size) chunks.push(event.data);
   };
-  recorder.start();
+  recorder.onerror = (event) => {
+    const detail = "error" in event && event.error instanceof Error ? event.error.message : "MediaRecorder error";
+    fatalError = new Error(detail);
+  };
+
+  try {
+    recorder.start(250);
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+
   return {
     stream,
-    stop: () =>
-      new Promise((resolve) => {
+    stop: () => {
+      if (stopped) {
+        return Promise.reject(new Error("Recording has already been stopped."));
+      }
+      stopped = true;
+      return new Promise((resolve, reject) => {
         recorder.onstop = () => {
-          stream.getTracks().forEach((track) => track.stop());
-          resolve(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+          cleanup();
+          if (fatalError) {
+            reject(fatalError);
+            return;
+          }
+          const blob = new Blob(chunks, { type: recorder.mimeType || mime || "audio/webm" });
+          if (!blob.size) {
+            reject(new Error("The microphone recording is empty."));
+            return;
+          }
+          resolve(blob);
         };
-        if (recorder.state !== "inactive") recorder.stop();
-        else {
-          stream.getTracks().forEach((track) => track.stop());
-          resolve(new Blob(chunks, { type: "audio/webm" }));
+        if (recorder.state !== "inactive") {
+          try {
+            recorder.requestData();
+          } catch {
+            // Some browsers do not allow requestData during teardown.
+          }
+          recorder.stop();
+        } else {
+          cleanup();
+          if (fatalError) reject(fatalError);
+          else reject(new Error("Recording stopped before audio was captured."));
         }
-      }),
+      });
+    },
   };
 }

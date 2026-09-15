@@ -303,13 +303,18 @@ export function resolveOgTitle(
   host = "",
   documentTitle = "",
 ) {
-  const fromSite = String(site.title ?? "").trim();
-  if (fromSite) return fromSite;
   const fromDoc = String(documentTitle ?? "").trim();
   if (fromDoc) return fromDoc;
+
+  const fromArg = String(appName ?? "").trim();
+  if (fromArg && fromArg !== DEFAULT_APP_NAME) return fromArg;
+
+  const fromSite = String(site.title ?? "").trim();
+  if (fromSite) return fromSite;
+
   const fromHost = appNameFromHost(host);
   if (fromHost && fromHost !== DEFAULT_APP_NAME) return fromHost;
-  const fromArg = String(appName ?? "").trim();
+
   return fromArg || DEFAULT_APP_NAME;
 }
 
@@ -322,8 +327,23 @@ export function siteHasCustomCard(site = {}) {
  * Vercel: the bake (`card=custom` / `image`) because the function cannot stat public/.
  * Otherwise empty — caller emits the og.grok.me placeholder.
  */
-export function resolveOgCardAsset(site = {}, cwd = process.cwd()) {
-  return ogCardPublicPath(cwd) || (detectCustomOgCard(cwd, site) ? String(site.image ?? "").trim() || "/og.jpg" : "");
+export function resolveOgCardAsset(
+  site = {},
+  cwd = process.cwd(),
+  useFilesystem = true,
+) {
+  if (useFilesystem) {
+    const disk = ogCardPublicPath(cwd);
+    if (disk) return disk;
+  }
+
+  const baked = String(site.image ?? "").trim();
+
+  if (siteHasCustomCard(site) || baked) {
+    return baked || "/og.jpg";
+  }
+
+  return "";
 }
 
 /** Stamp `card=custom` when public/og.jpg or public/og.png is on disk. */
@@ -339,6 +359,7 @@ export function grokOgHeadTags({
   site = {},
   documentTitle = "",
   cwd = process.cwd(),
+  useFilesystem = true,
 } = {}) {
   const title = resolveOgTitle(site, appName, host, documentTitle);
   const publicHost = resolvePublicHost(host);
@@ -354,7 +375,7 @@ export function grokOgHeadTags({
     tags.push(`<meta property="og:type" content="x:game">`);
   }
   if (publicHost) {
-    const asset = resolveOgCardAsset(site, cwd);
+    const asset = resolveOgCardAsset(site, cwd, useFilesystem);
     const custom = Boolean(asset);
     let image = custom
       ? `https://${publicHost}${asset.startsWith("/") ? asset : `/${asset}`}`
@@ -402,15 +423,44 @@ function insertBeforeHeadClose(html, snippet) {
 
 export function normalizeHeadContext(ctx = {}) {
   const cwd = ctx.cwd ?? process.cwd();
-  // Middleware passes a baked `site`. Still consult the workspace so a
-  // public/og.jpg generated after that snapshot (or missed by a wrong cwd)
-  // wins over the og.grok.me placeholder. Vercel has no public/ to read, so
-  // a correct bake is unchanged.
-  const site = applyCustomCardFromFs(
-    ctx.site !== undefined ? ctx.site : snapshotOgIdentity(cwd).site,
-    cwd,
-  );
-  const appName = resolveOgTitle(site, ctx.appName ?? DEFAULT_APP_NAME, ctx.host ?? "");
+
+  const explicitSite = ctx.site !== undefined;
+  const explicitCwd = ctx.cwd !== undefined;
+
+  const sourceSite =
+    explicitSite && ctx.site && typeof ctx.site === "object"
+      ? ctx.site
+      : explicitSite
+        ? {}
+        : snapshotOgIdentity(cwd).site;
+
+  const useFilesystem =
+    typeof ctx.useFilesystem === "boolean"
+      ? ctx.useFilesystem
+      : !explicitSite || explicitCwd;
+
+  const site = useFilesystem
+    ? applyCustomCardFromFs(sourceSite, cwd)
+    : { ...sourceSite };
+
+  const requestedName = String(ctx.appName ?? "").trim();
+  const siteName = String(site.title ?? "").trim();
+  const hostName = appNameFromHost(ctx.host ?? "");
+
+  let appName;
+
+  if (requestedName && requestedName !== DEFAULT_APP_NAME) {
+    appName = requestedName;
+  } else if (explicitSite && siteName) {
+    appName = siteName;
+  } else if (hostName && hostName !== DEFAULT_APP_NAME) {
+    appName = hostName;
+  } else if (siteName) {
+    appName = siteName;
+  } else {
+    appName = requestedName || DEFAULT_APP_NAME;
+  }
+
   return {
     appName,
     projectId: ctx.projectId ?? readGrokProjectId(),
@@ -419,16 +469,28 @@ export function normalizeHeadContext(ctx = {}) {
     host: ctx.host ?? "",
     cwd,
     site,
+    useFilesystem,
   };
 }
 
 export function injectGrokPwaHead(html, ctx = {}) {
   if (typeof html !== "string") return html;
-  const { site, projectId, creator, creatorId, host, cwd } = normalizeHeadContext(ctx);
+  const {
+    site,
+    projectId,
+    creator,
+    creatorId,
+    host,
+    cwd,
+    appName: normalizedAppName,
+    useFilesystem,
+  } = normalizeHeadContext(ctx);
+
   const documentTitle = titleFromDocument(html);
+
   const appName = resolveOgTitle(
     site,
-    ctx.appName ?? DEFAULT_APP_NAME,
+    normalizedAppName,
     host,
     documentTitle,
   );
@@ -444,7 +506,14 @@ export function injectGrokPwaHead(html, ctx = {}) {
 
   next = insertAfterHeadOpen(
     next,
-    grokOgHeadTags({ host, appName, site, documentTitle, cwd }).join(""),
+    grokOgHeadTags({
+      host,
+      appName,
+      site,
+      documentTitle,
+      cwd,
+      useFilesystem,
+    }).join(""),
   );
 
   if (!next.includes("/grok-app-builder/extensions.js")) {
@@ -498,6 +567,7 @@ export function createHeadInjector(ctx = {}) {
       host: normalized.host,
       cwd: normalized.cwd,
       site: normalized.site,
+      useFilesystem: normalized.useFilesystem,
     });
 
   return {

@@ -1,4 +1,4 @@
-export type ViewId = "flow" | "voice" | "cut" | "library";
+export type ViewId = "flow" | "voice" | "cut" | "library" | "mix" | "intel";
 export type AspectId = "9:16" | "16:9" | "1:1";
 export type CaptionStyleId = "clean" | "box" | "editorial" | "karaoke";
 export type LookId = "native" | "tungsten" | "silver" | "night" | "paper";
@@ -27,7 +27,6 @@ export interface SceneEdit {
   muted?: boolean;
   freezeAt?: number | null;
 }
-
 
 export interface Scene {
   id: string;

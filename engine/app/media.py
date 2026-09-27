@@ -61,7 +61,7 @@ def render_video(video,audio,out,start_s=0,end_s=None,width=None,height=None):
     cmd=[need('ffmpeg'),'-y','-v','error']
     if start_s and float(start_s)>0: cmd += ['-ss',f'{float(start_s):.3f}']
     cmd += ['-i',str(video),'-i',str(audio)]
-    if end_s is not None and float(end_s)>float(end_s if False else end_s):
+    if end_s is not None and float(end_s)>float(start_s):
         cmd += ['-t',f'{float(end_s)-float(start_s):.3f}']
     vf=[]
     if width and height: vf.append(f'scale={int(width)}:{int(height)}:force_original_aspect_ratio=decrease,pad={int(width)}:{int(height)}:(ow-iw)/2:(oh-ih)/2')

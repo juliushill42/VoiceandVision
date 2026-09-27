@@ -7,6 +7,7 @@ import { Segmented } from "@/components/studio/segmented";
 import { Timeline } from "@/components/studio/timeline";
 import { useMedia } from "@/components/studio/use-media";
 import { exportWebm } from "@/lib/studio/compositor";
+import { muxVision } from "@/lib/engine/vision";
 import { ASPECTS, CAPTION_STYLES, LOOKS } from "@/lib/studio/types";
 import { useStudio } from "@/lib/studio/store";
 import { downloadBlob, projectDuration } from "@/lib/utils";
@@ -38,15 +39,26 @@ export function CutView() {
     setPlaying(false);
     setExporting(true, 0);
     try {
-      const blob = await exportWebm(
-        project,
-        media,
-        duration,
-        (ratio) => setExporting(true, ratio),
-        audioRef.current,
-      );
-      downloadBlob(blob, "voice-and-vision.webm");
-      toast.success("Export ready");
+      try {
+        const mp4 = await muxVision({
+          project,
+          media,
+          duration,
+          onProgress: (ratio) => setExporting(true, ratio),
+        });
+        downloadBlob(mp4, "voice-and-vision.mp4");
+        toast.success("Vision MP4 — picture + bounce");
+      } catch (muxErr) {
+        const blob = await exportWebm(
+          project,
+          media,
+          duration,
+          (ratio) => setExporting(true, ratio),
+          audioRef.current,
+        );
+        downloadBlob(blob, "voice-and-vision.webm");
+        toast.message(muxErr instanceof Error ? muxErr.message + " — WebM only" : "WebM only");
+      }
     } catch (error) {
       toast.message(error instanceof Error ? error.message : "Export failed.");
     } finally {
@@ -57,13 +69,7 @@ export function CutView() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-3 md:p-4">
       {project.voiceoverUrl ? (
-        <audio
-          ref={audioRef}
-          data-vv-voiceover
-          src={project.voiceoverUrl}
-          preload="auto"
-          className="hidden"
-        />
+        <audio ref={audioRef} data-vv-voiceover src={project.voiceoverUrl} preload="auto" className="hidden" />
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_280px]">
         <PreviewStage media={media} onToggle={togglePlay} />
@@ -78,12 +84,7 @@ export function CutView() {
           </div>
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-widest text-subtle">Captions</p>
-            <Segmented
-              value={project.captionStyle}
-              options={CAPTION_STYLES}
-              onChange={setCaptionStyle}
-              ariaLabel="Caption style"
-            />
+            <Segmented value={project.captionStyle} options={CAPTION_STYLES} onChange={setCaptionStyle} ariaLabel="Caption style" />
           </div>
           <div className="grid grid-cols-2 gap-2 pt-1 lg:flex lg:flex-col">
             <Button size="sm" onClick={cutFromScript} disabled={!project.script.trim()}>
@@ -93,7 +94,7 @@ export function CutView() {
               <ImagePlus /> Import media
             </Button>
             <Button size="sm" variant="secondary" onClick={() => void exportCut()} disabled={exporting}>
-              <Film /> {exporting ? `Export ${Math.round(exportProgress * 100)}%` : "Export WebM"}
+              <Film /> {exporting ? `Export ${Math.round(exportProgress * 100)}%` : "Export video"}
             </Button>
             <Button size="sm" variant="ghost" onClick={downloadSrt} disabled={!project.captions.length}>
               <Download /> Captions SRT
@@ -116,17 +117,9 @@ export function CutView() {
           </div>
           <ul className="hidden flex-col gap-1 pt-2 lg:flex">
             {project.scenes.map((scene) => (
-              <li
-                key={scene.id}
-                className="flex items-center justify-between gap-2 rounded-md bg-raised px-2 py-1.5"
-              >
+              <li key={scene.id} className="flex items-center justify-between gap-2 rounded-md bg-raised px-2 py-1.5">
                 <span className="truncate text-xs text-fg">{scene.label}</span>
-                <button
-                  type="button"
-                  className="flex size-8 items-center justify-center rounded-md text-muted hover:text-fg"
-                  aria-label={`Remove ${scene.label}`}
-                  onClick={() => removeScene(scene.id)}
-                >
+                <button type="button" className="flex size-8 items-center justify-center rounded-md text-muted hover:text-fg" aria-label={`Remove ${scene.label}`} onClick={() => removeScene(scene.id)}>
                   <Trash2 className="size-3.5" />
                 </button>
               </li>
@@ -142,11 +135,7 @@ export function CutView() {
           setPlayhead(time);
           const audio = audioRef.current;
           if (audio) {
-            try {
-              audio.currentTime = time;
-            } catch {
-              /* seek */
-            }
+            try { audio.currentTime = time; } catch { /* seek */ }
           }
         }}
       />

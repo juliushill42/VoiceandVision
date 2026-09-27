@@ -12,11 +12,8 @@ async function req(path: string, init?: RequestInit) {
 }
 
 export async function engineHealth() {
-  try {
-    return await req("/api/health");
-  } catch {
-    return { ok: false, offline: true };
-  }
+  try { return await req("/api/health"); }
+  catch { return { ok: false, offline: true }; }
 }
 
 export async function createEngineProject(name: string, creator: string) {
@@ -28,12 +25,8 @@ export async function createEngineProject(name: string, creator: string) {
 }
 
 export async function uploadEngineMedia(projectId: string, file: Blob, kind: string, part: string, filename: string) {
-  const fd = new FormData();
-  fd.append("project_id", projectId);
-  fd.append("kind", kind);
-  fd.append("part", part);
-  fd.append("file", file, filename);
-  return req("/api/media", { method: "POST", body: fd });
+  const qs = new URLSearchParams({ project_id: projectId, kind, part, name: filename });
+  return req(`/api/media?${qs}`, { method: "POST", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
 }
 
 export async function analyzeMedia(projectId: string, mediaId: string) {
@@ -45,10 +38,19 @@ export async function analyzeMedia(projectId: string, mediaId: string) {
 }
 
 export async function processVocal(projectId: string, mediaId: string, params: Record<string, unknown> = {}) {
+  const settings = {
+    highpass_hz: params.highpass_hz ?? params.hp_hz ?? params.hpHz ?? 85,
+    gate_db: params.gate_db ?? params.gateDb ?? -38,
+    compressor_threshold_db: params.compressor_threshold_db ?? -18,
+    compressor_ratio: params.compressor_ratio ?? 3,
+    makeup_db: params.makeup_db ?? 2,
+    ceiling_db: params.ceiling_db ?? -1,
+    ...params,
+  };
   return req("/api/process/vocal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ project_id: projectId, media_id: mediaId, ...params }),
+    body: JSON.stringify({ project_id: projectId, media_id: mediaId, settings }),
   });
 }
 
@@ -85,13 +87,8 @@ export async function inspectSession(projectId: string, audioMediaIds: string[])
 }
 
 export async function decideSuggestion(input: {
-  project_id: string;
-  suggestion_id: string;
-  decision: "accept" | "reject";
-  kind?: string;
-  params?: Record<string, unknown>;
-  note?: string;
-  execute?: boolean;
+  project_id: string; suggestion_id: string; decision: "accept" | "reject";
+  kind?: string; params?: Record<string, unknown>; note?: string; execute?: boolean;
 }) {
   return req("/api/override", {
     method: "POST",
@@ -107,10 +104,7 @@ export async function shareBlob(blob: Blob, filename: string, title: string) {
     return "native-share";
   }
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
   return "download";
 }

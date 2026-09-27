@@ -1,10 +1,12 @@
 import { useEffect } from "react";
-import { Clapperboard, Library, Mic, Volume2 } from "lucide-react";
+import { Clapperboard, Library, Mic, SlidersHorizontal, Sparkles, Volume2 } from "lucide-react";
 import { Toaster } from "sonner";
 import { FlowView } from "@/components/studio/flow-view";
 import { VoiceView } from "@/components/studio/voice-view";
 import { CutView } from "@/components/studio/cut-view";
 import { LibraryView } from "@/components/studio/library-view";
+import { IntelView } from "@/components/studio/intel-view";
+import { MixView } from "@/components/studio/mix-view";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useStudio } from "@/lib/studio/store";
 import { cn } from "@/lib/utils";
@@ -14,6 +16,8 @@ const NAV: { id: ViewId; label: string; icon: typeof Mic }[] = [
   { id: "flow", label: "Flow", icon: Mic },
   { id: "voice", label: "Voice", icon: Volume2 },
   { id: "cut", label: "Cut", icon: Clapperboard },
+  { id: "mix", label: "Mix", icon: SlidersHorizontal },
+  { id: "intel", label: "Intel", icon: Sparkles },
   { id: "library", label: "Library", icon: Library },
 ];
 
@@ -61,7 +65,9 @@ export function StudioApp() {
       if (event.key === "1") setView("flow");
       if (event.key === "2") setView("voice");
       if (event.key === "3") setView("cut");
-      if (event.key === "4") setView("library");
+      if (event.key === "4") setView("mix");
+      if (event.key === "5") setView("intel");
+      if (event.key === "6") setView("library");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -84,22 +90,11 @@ export function StudioApp() {
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <nav
-            aria-label="Studio"
-            className="hidden w-16 shrink-0 flex-col items-center gap-1 border-r border-border py-3 md:flex"
-          >
+          <nav aria-label="Studio" className="hidden w-16 shrink-0 flex-col items-center gap-1 border-r border-border py-3 md:flex">
             {NAV.map((item) => (
               <Tooltip key={item.id}>
                 <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setView(item.id)}
-                    aria-current={view === item.id}
-                    className={cn(
-                      "flex size-11 items-center justify-center rounded-lg transition-colors duration-150",
-                      view === item.id ? "bg-raised text-fg" : "text-muted hover:text-fg",
-                    )}
-                  >
+                  <button type="button" onClick={() => setView(item.id)} aria-current={view === item.id} className={cn("flex size-11 items-center justify-center rounded-lg transition-colors duration-150", view === item.id ? "bg-raised text-fg" : "text-muted hover:text-fg")}>
                     <item.icon className="size-4" />
                     <span className="sr-only">{item.label}</span>
                   </button>
@@ -108,43 +103,24 @@ export function StudioApp() {
               </Tooltip>
             ))}
           </nav>
-
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-20 md:pb-0">
             {view === "flow" ? <FlowView /> : null}
             {view === "voice" ? <VoiceView /> : null}
             {view === "cut" ? <CutView /> : null}
+            {view === "mix" ? <MixView /> : null}
+            {view === "intel" ? <IntelView /> : null}
             {view === "library" ? <LibraryView /> : null}
           </main>
         </div>
-
-        <nav
-          aria-label="Studio mobile"
-          className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-bg/95 pb-[env(safe-area-inset-bottom)] md:hidden"
-        >
+        <nav aria-label="Studio mobile" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-border bg-bg/95 pb-[env(safe-area-inset-bottom)] md:hidden">
           {NAV.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setView(item.id)}
-              className={cn(
-                "flex h-14 flex-col items-center justify-center gap-1 text-xs",
-                view === item.id ? "text-fg" : "text-muted",
-              )}
-            >
+            <button key={item.id} type="button" onClick={() => setView(item.id)} className={cn("flex h-14 flex-col items-center justify-center gap-1 text-[10px]", view === item.id ? "text-fg" : "text-muted")}>
               <item.icon className="size-4" />
               {item.label}
             </button>
           ))}
         </nav>
-        <Toaster
-          theme="dark"
-          position="bottom-right"
-          toastOptions={{
-            classNames: {
-              toast: "bg-raised text-fg border-border",
-            },
-          }}
-        />
+        <Toaster theme="dark" position="bottom-right" toastOptions={{ classNames: { toast: "bg-raised text-fg border-border" } }} />
       </div>
     </TooltipProvider>
   );
@@ -154,10 +130,7 @@ function Mark() {
   return (
     <svg viewBox="0 0 32 32" className="size-8 shrink-0" aria-hidden="true">
       <rect width="32" height="32" rx="8" className="fill-raised" />
-      <path
-        d="M9 22V10h2.2l4.8 8.4L20.8 10H23v12h-2.1v-7.6L16.6 22h-1.2l-4.3-7.6V22H9z"
-        className="fill-fg"
-      />
+      <path d="M9 22V10h2.2l4.8 8.4L20.8 10H23v12h-2.1v-7.6L16.6 22h-1.2l-4.3-7.6V22H9z" className="fill-fg" />
     </svg>
   );
 }

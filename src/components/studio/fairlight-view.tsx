@@ -27,7 +27,7 @@ export function FairlightView() {
       const blob = await fetch(voiceoverUrl).then((r) => r.blob());
       const armed = strips.find((s) => s.arm) || strips[4];
       const media = await uploadEngineMedia(session.projectId, blob, "audio", armed.id, `${armed.id}.webm`);
-      await processVocal(session.projectId, media.id, { hp_hz: armed.hpHz, gate_db: armed.gateDb });
+      await processVocal(session.projectId, media.id, { highpass_hz: armed.hpHz, gate_db: armed.gateDb });
       const tracks = strips.filter((s) => !s.mute && (!soloing || s.solo)).map((s) => ({
         media_id: media.id, gain_db: s.gainDb + masterDb, pan: s.pan, mute: s.mute, solo: s.solo, offset_ms: 0, part: s.id, slot: s.slot,
       }));
@@ -49,7 +49,7 @@ export function FairlightView() {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div>
           <h2 className="font-display text-lg">Fairlight</h2>
-          <p className="text-xs text-subtle">Titan 16-track. CarEoke HP/gate. Deliver is a file.</p>
+          <p className="text-xs text-subtle">Titan 16. CarEoke HP/gate actually processed. File deliver.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" disabled={busy} onClick={bounce}>Bounce</Button>

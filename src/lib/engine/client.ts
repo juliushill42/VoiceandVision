@@ -70,6 +70,22 @@ export async function renderMaster(projectId: string, artifactId: string, params
   });
 }
 
+export async function renderVideo(input: {
+  project_id: string;
+  video_media_id: string;
+  audio_artifact_id: string;
+  start_s?: number;
+  end_s?: number;
+  width?: number;
+  height?: number;
+}) {
+  return req("/api/video/render", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
 export async function analyzeSync(projectId: string, audioMediaId: string, videoMediaId: string) {
   return req("/api/sync", {
     method: "POST",
